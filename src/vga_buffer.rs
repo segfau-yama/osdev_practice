@@ -117,12 +117,19 @@ impl fmt::Write for Writer {
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+// 書き込み対象
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
+}
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    use core::fmt::Write;
+    WRITER.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
@@ -136,8 +143,28 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
+#[test_case]
+fn test_println_simple() {
+    println!("test_println_simple output");
+}
+
+#[test_case]
+fn test_println_many() {
+    for _ in 0..200 {
+        println!("test_println_many output");
+    }
+}
+
+#[test_case]
+fn test_println_output() {
     use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+    use x86_64::instructions::interrupts;
+
+    interrupts::without_interrupts(|| {
+        let mut writer = WRITER.lock();
+        writeln!(writer, "test_println_output").expect("writeln failed");
+        for _ in 0..200 {
+            writeln!(writer, "test_println_output").expect("writeln failed");
+        }
+    });
 }
